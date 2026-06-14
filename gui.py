@@ -42,7 +42,7 @@ class SisyphusApp:
         ttk.Button(top, text=self._("browse"), command=self._browse).pack(side="left", padx=2)
         
         # Config file
-        ttk.Label(top, text="Config:").pack(side="left", padx=(10,2))
+        ttk.Label(top, text=self._("config_label")).pack(side="left", padx=(10,2))
         cfg_entry = ttk.Entry(top, textvariable=self.config_path, width=20)
         cfg_entry.pack(side="left", padx=2)
         ttk.Button(top, text="...", width=3, command=self._browse_config).pack(side="left")
@@ -63,8 +63,7 @@ class SisyphusApp:
         sf = ttk.LabelFrame(r, text=self._("strategies_label"), padding=5)
         sf.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
         
-        info = ("Pipeline: Hardcode Mappings → Metadata Extraction → "
-                "Regex Rules → Generic Sanitizer → Fallback Cluster")
+        info = self._("pipeline_info")
         ttk.Label(sf, text=info, font=("", 9)).pack(side="left", padx=10)
         
         # Row 2: Buttons
@@ -117,7 +116,7 @@ class SisyphusApp:
     def _on_lang_change(self, *a):
         new = self.lang_var.get()
         if new != _i18n.lang:
-            messagebox.showinfo("Language", "Restart to apply language change.")
+            messagebox.showinfo(self._("lang_title"), self._("lang_restart"))
             self.lang_var.set(_i18n.lang)
     
     def _set_status(self, msg):
@@ -160,7 +159,7 @@ class SisyphusApp:
         if self.running: return
         dir_ = self.target_dir.get()
         if not os.path.isdir(dir_):
-            messagebox.showerror("Error", self._("err_invalid_dir")+"\n"+dir_); return
+            messagebox.showerror(self._("error_title"), self._("err_invalid_dir")+"\n"+dir_); return
         
         self.running = True
         self._set_status(self._("status_loading"))
@@ -183,7 +182,7 @@ class SisyphusApp:
             try:
                 records = run_full_scan(dir_, config)
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Scan Error", str(e)))
+                self.root.after(0, lambda: messagebox.showerror(self._("scan_error_title"), str(e)))
                 records = []
             self.preview_data = records
             self.root.after(0, lambda: self._on_scan_done(records))
@@ -203,7 +202,7 @@ class SisyphusApp:
     
     def _export(self):
         if not self.preview_data:
-            messagebox.showwarning("No Data", self._("err_no_data")); return
+            messagebox.showwarning(self._("no_data_title"), self._("err_no_data")); return
         path = filedialog.asksaveasfilename(defaultextension=".csv",
             filetypes=[("CSV","*.csv")], initialfile="sisyphus_preview.csv")
         if not path: return
@@ -244,10 +243,7 @@ class SisyphusApp:
         self.running = False
     
     def _about(self):
-        messagebox.showinfo("Sisyphus v1.1.0",
-            "Universal Garbled Filename Recovery\n\n"
-            "Pipeline: Hardcode → Metadata → Regex → Sanitizer → Fallback\n"
-            "github.com/deancyl/sisyphus-filename-recovery")
+        messagebox.showinfo(self._("about_title"), self._("about_text"))
     
     def run(self):
         self.root.mainloop()

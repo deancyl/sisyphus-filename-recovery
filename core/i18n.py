@@ -31,6 +31,15 @@ STRINGS = {
         "acp_ok": "correct for Chinese software",
         "acp_warn": "may cause garbled text",
         "lang_label": "Lang",
+        "config_label": "Config:",
+        "pipeline_info": "Pipeline: Hardcode Mappings → Metadata Extraction → Regex Rules → Sanitizer → Fallback Cluster",
+        "lang_restart": "Restart to apply language change.",
+        "about_title": "Sisyphus v1.1.0",
+        "about_text": "Universal Garbled Filename Recovery\n\nPipeline:\n  Hardcode → Metadata → Regex → Sanitizer → Fallback\n\ngithub.com/deancyl/sisyphus-filename-recovery",
+        "error_title": "Error",
+        "scan_error_title": "Scan Error",
+        "lang_title": "Language",
+        "no_data_title": "No Data",
     },
     "zh": {
         "title": "西西弗斯 - 文件名修复 v1.1",
@@ -61,6 +70,15 @@ STRINGS = {
         "acp_ok": "适合中文软件",
         "acp_warn": "可能导致乱码",
         "lang_label": "语言",
+        "config_label": "配置:",
+        "pipeline_info": "流水线: 硬编码映射 → 元数据提取 → 正则规则 → 通用清洗 → 兜底归档",
+        "lang_restart": "重启程序以应用语言变更。",
+        "about_title": "西西弗斯 v1.1.0",
+        "about_text": "通用乱码文件名恢复工具\n\n恢复流水线:\n  硬编码 → 元数据 → 正则 → 清洗 → 归档\n\ngithub.com/deancyl/sisyphus-filename-recovery",
+        "error_title": "错误",
+        "scan_error_title": "扫描错误",
+        "lang_title": "语言",
+        "no_data_title": "无数据",
     }
 }
 
