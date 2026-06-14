@@ -1,0 +1,52 @@
+# === Sisyphus User Configuration ===
+# Copy this file to config.yaml and customize for your needs.
+# All rules are optional - the engine works without any custom rules.
+
+# ---- Hardcode mappings: exact filename -> exact replacement ----
+# Use for files with non-standard encoding corruption
+# where the garbled name is always identical.
+hardcode_mappings:
+  # "ç³»ç»Ÿ.csv": "系统.csv"
+  # "360U┼╠╝°╢¿╞≈╢└┴ó░µ.exe.zip": "360U盘鉴定器独立版.exe.zip"
+
+# ---- Regex replace: pattern -> replacement ----
+# Applied to filenames that match known garbled patterns.
+# Use Python regex syntax.
+regex_rules:
+  # - pattern: "閿熸枻鎷峰綍閿熸枻鎷烽敓绲痑v"
+  #   replace: "录像.wav"
+  # - pattern: "微锟斤拷图片"
+  #   replace: "微信图片"
+
+# ---- Business content prefix rules ----
+# For files starting with a numeric prefix (e.g. "10001...xlsx"),
+# the engine will try to read cell A1 to discover a label.
+# Define how to parse the label here.
+content_rules:
+  # prefix_pattern: "^\\d{5}"           # regex to match filename start
+  # label_format: "{prefix}{label}_{date}_{type}{seq}{ext}"
+  # type_keywords:                      # keywords in filename -> document type
+  #   模板: "template"
+  #   工资: "salary"
+  #   report: "report"
+  # date_mapping:                       # corrupted date -> real date
+  #   "0264": "2026年04月"
+  #   "0265": "2026年05月"
+
+# ---- File type filter: only scan these extensions ----
+# Empty = scan all
+scan_extensions:
+  # - .xlsx
+  # - .docx
+  # - .pdf
+  # - .torrent
+  # - .zip
+
+# ---- Skip patterns: files matching these are never touched ----
+skip_patterns:
+  - "^Recovered_"
+  - "^_Trash"
+  - "^_Sisyphus"
+
+# ---- Sanitizer: characters to strip as garbled ----
+garbled_chars: "閿熸枻鎷鏂ゆ嫹烽敓绲痑铻锟斤拷\uFFFD"
