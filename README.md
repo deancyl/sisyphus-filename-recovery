@@ -37,12 +37,19 @@ Hardcode Mappings → Metadata Extraction → Regex Rules → Sanitizer → Fall
 ## 快速开始
 
 ```bash
-# Prerequisites: Python 3.8+, tkinter (included with Python on Windows)
 pip install -r requirements.txt
 python gui.py
 ```
 
-GUI auto-detects system language (zh-CN / en-US).
+GUI 自动检测系统语言（中文/English）。无需配置即可使用——内置乱码指纹库覆盖绝大多数场景。
+
+选择一个预设或直接扫描：
+
+| 预设 | 适用场景 |
+|------|---------|
+| 标准 GBK/UTF-8 修复 | 系统编码错乱导致的经典乱码 |
+| 媒体与种子恢复 | PT/BT 下载，读取元数据优先 |
+| 办公批量文件恢复 | Excel/PDF/Word 深度内容提取 |
 
 ## 项目结构
 

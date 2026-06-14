@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1 (2026-06-14)
+### Changed
+- Merged Config + Preset into single localized preset dropdown
+- Preset names follow UI language (zh: 标准 GBK/UTF-8 修复, en: Standard GBK/UTF-8)
+- "Load custom YAML..." option replaces separate config file input
+
 ## v1.2.0 (2026-06-14)
 ### Added
 - Built-in garbled fingerprint database (no config needed)
