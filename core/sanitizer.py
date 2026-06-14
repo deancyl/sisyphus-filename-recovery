@@ -1,81 +1,152 @@
 """
-Generic garbled text sanitizer.
-Strips known garbled Unicode blocks, preserves surviving meaningful text.
-No business-specific logic.
+Universal garbled text detector + sanitizer (v1.2).
+Built-in fingerprint database - works without any config.
 """
 import re, os, datetime, hashlib, shutil
 
-# Known garbled character ranges (expanded from real-world data)
+# ============================================================
+# Module 1: Built-in garbled fingerprint database
+# ============================================================
+
+# Known garbled fingerprints - no config needed
+DEFAULT_GARBLED_FINGERPRINTS = [
+    # Classic GBK/UTF-8 double-encoding signatures
+    '锟斤拷', '閿熸枻', '鎷烽敓', '鏂ゆ嫹', '铻厧',
+    # VC++ debug heap fill patterns (rare but real)
+    '烫烫烫', '屯屯屯',
+    # UTF-8 BOM misread
+    '锘',
+    # U+FFFD replacement character (byte permanently lost)
+    '\ufffd', '\uFFFD',
+    # CP437/CP850 misinterpretation signatures
+    '┼╠╝', '╟δ╧', 'úí',
+    # ISO-8859-1 high-byte noise patterns
+    'Ã', 'Â', 'Å',
+]
+
+# Continuous control/non-printable character threshold
+_CONTROL_THRESHOLD = 3
+
+# Regex: filename is primarily normal Chinese + ASCII = safe
+_SAFE_CJK_RE = re.compile(r'^[\u4e00-\u9fa5a-zA-Z0-9\.\-\_\(\)\[\]\,\;\：\（\）\s]+$')
+
+# Garbled character blocks for stripping (expanded)
 _GARBLED_BLOCKS = (
     '閿熸枻鎷鏂ゆ嫹烽敓绲痑铻厧搴楃骇缁存唻碉拷婵'
     '锟斤拷锟絯塕捇屽姵塻墿瀵屽▍瀵曟禍椋庢嫹塳鏂ゆ壈'
     '濠婄€犲摜瀵斿▍椋庢嫹渚濞€┼╠╝°╢¿╞≈╢└┴ó░µ'
     '╟δ╧╚╜Γ╤╣ú╚╗║≤╘┘╘╦╨╨úí'
 )
-
 _GARBLED_RE = re.compile(f'[{re.escape(_GARBLED_BLOCKS)}]+')
-_REPLACEMENT_RE = re.compile(r'[\uFFFD\ufffd]+')  # U+FFFD replacement characters
+_REPLACEMENT_RE = re.compile(r'[\uFFFD\ufffd]+')
 _MULTI_UNDERSCORE = re.compile(r'_+')
 _MULTI_SPACE = re.compile(r' {2,}')
 _MULTI_DOT = re.compile(r'\.{2,}')
+
+# ============================================================
+# is_garbled() - Decision tree
+# ============================================================
+
+def _count_control_chars(name):
+    """Count non-printable control characters"""
+    return sum(1 for c in name if ord(c) < 32 and c not in '\t\n\r')
+
+def is_garbled(filename, extra_patterns=None):
+    """
+    Decision tree for garbled filename detection.
+    
+    Fingerprint check FIRST (before safe-CJK gate), because garbled text
+    like 閿熸枻 is technically valid CJK but semantically garbled.
+    
+    Returns True if filename appears garbled and needs recovery.
+    """
+    # Interceptor: pure ASCII is always safe
+    if all(ord(c) < 128 for c in filename):
+        return False
+    
+    # BRANCH 1: User-supplied patterns (highest priority)
+    if extra_patterns:
+        for pat in extra_patterns:
+            try:
+                if re.search(pat, filename):
+                    return True
+            except re.error:
+                pass
+    
+    # BRANCH 2: Built-in fingerprints (check BEFORE safe-CJK gate)
+    # Garbled CJK chars like 閿熸枻 are valid Unicode but semantically garbled
+    for fp in DEFAULT_GARBLED_FINGERPRINTS:
+        if fp in filename:
+            return True
+    
+    # BRANCH 3: Continuous control characters
+    if _count_control_chars(filename) >= _CONTROL_THRESHOLD:
+        return True
+    
+    # BRANCH 4: U+FFFD blocks (3+ consecutive replacement chars)
+    if re.search(r'\ufffd{3,}', filename) or re.search(r'\uFFFD{3,}', filename):
+        return True
+    
+    # INTERCEPTOR: Normal Chinese + ASCII = safe (false positive prevention)
+    if _SAFE_CJK_RE.match(filename):
+        return False
+    
+    return False
+
+# ============================================================
+# Sanitizer
+# ============================================================
 
 def sanitize_filename(name):
     """Strip garbled characters, keep surviving ASCII/CJK fragments.
     Returns sanitized name or None if nothing useful remains."""
     
-    # 1. Strip known garbled blocks
     cleaned = _GARBLED_RE.sub('', name)
-    
-    # 2. Strip replacement characters
     cleaned = _REPLACEMENT_RE.sub('', cleaned)
-    
-    # 3. Clean up artifacts
     cleaned = _MULTI_UNDERSCORE.sub('_', cleaned)
     cleaned = _MULTI_SPACE.sub(' ', cleaned)
     cleaned = _MULTI_DOT.sub('.', cleaned)
     cleaned = cleaned.strip(' _-')
-    
-    # 4. Remove empty parens
     cleaned = re.sub(r'\(\s*\)', '', cleaned)
     
-    # 5. Check if anything useful remains
     meaningful = sum(1 for c in cleaned if c.isalnum() or c in '._-()[]')
     if meaningful < 2:
         return None
     
     return cleaned
 
-# === Fallback: cluster into date-based folders ===
+# ============================================================
+# Fallback cluster
+# ============================================================
+
 def cluster_fallback(fpath, directory):
-    """Move un-recoverable files into Recovered_YYYY-MM-DD/ with hash-based names"""
+    """Move unrecoverable files into Recovered_YYYY-MM-DD/ with hash names"""
     try:
         mtime = os.path.getmtime(fpath)
         date_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
         
-        # Determine category from extension
         ext = os.path.splitext(fpath)[1].lower()
-        if ext in ('.jpg','.jpeg','.png','.gif','.bmp','.webp'):
-            folder = f"Recovered_Images_{date_str}"
-            prefix = "IMG"
-        elif ext in ('.mp4','.mkv','.avi','.mov','.wmv'):
-            folder = f"Recovered_Videos_{date_str}"
-            prefix = "VID"
-        elif ext in ('.mp3','.wav','.flac','.aac','.wma'):
-            folder = f"Recovered_Audio_{date_str}"
-            prefix = "AUD"
-        elif ext in ('.doc','.docx','.pdf','.xls','.xlsx','.ppt','.pptx'):
-            folder = f"Recovered_Docs_{date_str}"
-            prefix = "DOC"
-        else:
-            folder = f"Recovered_Files_{date_str}"
-            prefix = "FILE"
+        category_map = {
+            '.jpg': 'Images', '.jpeg': 'Images', '.png': 'Images', '.gif': 'Images', '.bmp': 'Images', '.webp': 'Images',
+            '.mp4': 'Videos', '.mkv': 'Videos', '.avi': 'Videos', '.mov': 'Videos', '.wmv': 'Videos',
+            '.mp3': 'Audio', '.wav': 'Audio', '.flac': 'Audio', '.aac': 'Audio',
+            '.doc': 'Docs', '.docx': 'Docs', '.pdf': 'Docs', '.xls': 'Docs', '.xlsx': 'Docs', '.ppt': 'Docs', '.pptx': 'Docs',
+        }
+        prefix_map = {
+            '.jpg': 'IMG', '.jpeg': 'IMG', '.png': 'IMG', '.gif': 'IMG', '.bmp': 'IMG', '.webp': 'IMG',
+            '.mp4': 'VID', '.mkv': 'VID', '.avi': 'VID', '.mov': 'VID', '.wmv': 'VID',
+            '.mp3': 'AUD', '.wav': 'AUD', '.flac': 'AUD', '.aac': 'AUD',
+            '.doc': 'DOC', '.docx': 'DOC', '.pdf': 'DOC', '.xls': 'DOC', '.xlsx': 'DOC', '.ppt': 'DOC', '.pptx': 'DOC',
+        }
         
-        # Generate unique name with content hash
+        cat = category_map.get(ext, 'Files')
+        prefix = prefix_map.get(ext, 'FILE')
+        folder = f"Recovered_{cat}_{date_str}"
+        
         h = hashlib.md5()
         try:
             with open(fpath, 'rb') as f:
-                for chunk in iter(lambda: f.read(65536), b''):
-                    h.update(chunk)
+                for chunk in iter(lambda: f.read(65536), b''): h.update(chunk)
             short_hash = h.hexdigest()[:8]
         except:
             short_hash = datetime.datetime.now().strftime("%H%M%S")
@@ -85,31 +156,41 @@ def cluster_fallback(fpath, directory):
     except:
         return None
 
+# ============================================================
+# Scanner
+# ============================================================
+
 def scan_sanitize(directory, config=None):
-    """Apply sanitizer to all files, cluster fallbacks. Returns [(old, new, strategy), ...]"""
+    """Apply sanitizer + fallback to garbled files. Returns [(old, new, strategy), ...]"""
     records = []
-    skip = set()
-    if config:
-        skip.update(config.get('skip_patterns', []))
+    skip = set(config.get('skip_patterns', [])) if config else set()
     
     for fname in sorted(os.listdir(directory)):
         fpath = os.path.join(directory, fname)
+        
+        # Gate: skip directories (handled separately)
         if os.path.isdir(fpath):
-            # Also clean directory names
-            cleaned = sanitize_filename(fname)
-            if cleaned and cleaned != fname:
-                records.append((fname, cleaned, "DirSanitize"))
+            if is_garbled(fname):
+                cleaned = sanitize_filename(fname)
+                if cleaned and cleaned != fname and len(cleaned) >= 2:
+                    records.append((fname, cleaned, "DirSanitize"))
             continue
         
-        if any(re.match(p, fname) for p in skip): continue
-        if not any(ord(c) > 127 for c in fname): continue
+        # Gate: skip patterns
+        if any(re.match(p, fname) for p in skip):
+            continue
+        
+        # Gate: only process garbled files
+        extra = config.get('garbled_patterns', []) if config else []
+        if not is_garbled(fname, extra):
+            continue
         
         # Try sanitize first
         cleaned = sanitize_filename(fname)
         if cleaned and cleaned != fname and len(cleaned) >= 3:
             records.append((fname, cleaned, "Sanitize"))
         else:
-            # Fallback: cluster
+            # Fallback cluster
             result = cluster_fallback(fpath, directory)
             if result:
                 records.append((fname, result, "Fallback"))

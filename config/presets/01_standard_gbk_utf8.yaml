@@ -1,0 +1,35 @@
+# Preset: Standard GBK/UTF-8 Encoding Corruption
+# Best for: typical "chinese filename garbled after system locale change" scenarios.
+# Focus: regex-based sanitizing, minimal file content reading.
+
+preset:
+  name: "Standard GBK/UTF-8 Recovery"
+  description: "Classic double-encoding fix. Lightweight, no deep file reading."
+
+# Garbled pattern fingerprints to detect
+garbled_patterns:
+  - "閿熸枻"
+  - "锟斤拷"
+  - "鎷烽敓"
+  - "鏂ゆ嫹"
+  - "烫烫烫"
+  - "屯屯屯"
+
+# Regex rules for known patterns
+regex_rules:
+  - pattern: "閿熸枻鎷峰綍閿熸枻鎷烽敓绲"
+    replace: "录像"
+  - pattern: "锟斤拷录锟斤拷锟"
+    replace: "录像"
+  - pattern: "微锟斤拷图片"
+    replace: "微信图片"
+  - pattern: "微锟斤拷"
+    replace: "微信"
+  - pattern: "图片转锟斤拷频"
+    replace: "图片转视频"
+
+# Skip patterns
+skip_patterns:
+  - "^Recovered_"
+  - "^_Trash"
+  - "^_Sisyphus"

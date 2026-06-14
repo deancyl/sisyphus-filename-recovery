@@ -3,7 +3,7 @@ import locale
 
 STRINGS = {
     "en": {
-        "title": "Sisyphus - Filename Recovery v1.1",
+        "title": "Sisyphus - Filename Recovery v1.2",
         "target_label": "Target:",
         "browse": "Browse",
         "strategies_label": " Pipeline ",
@@ -32,6 +32,7 @@ STRINGS = {
         "acp_warn": "may cause garbled text",
         "lang_label": "Lang",
         "config_label": "Config:",
+        "preset_label": "Preset:",
         "pipeline_info": "Pipeline: Hardcode Mappings → Metadata Extraction → Regex Rules → Sanitizer → Fallback Cluster",
         "lang_restart": "Restart to apply language change.",
         "about_title": "Sisyphus v1.1.0",
@@ -42,7 +43,7 @@ STRINGS = {
         "no_data_title": "No Data",
     },
     "zh": {
-        "title": "西西弗斯 - 文件名修复 v1.1",
+        "title": "西西弗斯 - 文件名修复 v1.2",
         "target_label": "目标:",
         "browse": "浏览",
         "strategies_label": " 恢复流水线 ",
@@ -71,6 +72,7 @@ STRINGS = {
         "acp_warn": "可能导致乱码",
         "lang_label": "语言",
         "config_label": "配置:",
+        "preset_label": "预设:",
         "pipeline_info": "流水线: 硬编码映射 → 元数据提取 → 正则规则 → 通用清洗 → 兜底归档",
         "lang_restart": "重启程序以应用语言变更。",
         "about_title": "西西弗斯 v1.1.0",

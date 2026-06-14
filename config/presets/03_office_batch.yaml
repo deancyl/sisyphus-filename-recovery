@@ -1,0 +1,39 @@
+# Preset: Office / Batch File Recovery
+# Best for: office documents, spreadsheets, PDFs with garbled names.
+# Focus: deep content reading (Excel cells, PDF titles, docx properties).
+
+preset:
+  name: "Office & Batch File Recovery"
+  description: "Deep content reading. Extracts titles from office documents."
+
+# Enable aggressive content extraction
+metadata_priority: maximum
+
+# Content extraction rules for numbered Excel files
+content_rules:
+  prefix_pattern: "^\\d{5}"
+  label_format: "{prefix}{label}_{date}_{type}{seq}{ext}"
+  type_keywords:
+    template: "模板"
+    salary: "薪资"
+    report: "报告"
+    config: "配置"
+  date_mapping:
+    "0263": "2026年03月"
+    "0264": "2026年04月"
+    "0265": "2026年05月"
+    "0266": "2026年06月"
+
+# Regex rules for office-specific patterns
+regex_rules:
+  - pattern: "閿熸枻鎷烽敓鏂ゆ嫹"
+    replace: ""
+  - pattern: "锟斤拷"
+    replace: ""
+
+# Skip patterns
+skip_patterns:
+  - "^Recovered_"
+  - "^_Trash"
+  - "^_Sisyphus"
+  - "\\.(exe|msi|apk|dll|sys)$"

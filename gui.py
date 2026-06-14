@@ -1,6 +1,6 @@
 """
-Sisyphus v1.1.0 - Universal Garbled Filename Recovery GUI
-Pure tkinter, i18n zh/en, config-driven pipeline
+Sisyphus v1.2.0 - Universal Garbled Filename Recovery GUI
+Pure tkinter, i18n zh/en, preset-driven pipeline
 """
 import os, sys, threading, datetime, csv
 import tkinter as tk
@@ -9,7 +9,7 @@ from tkinter import ttk, filedialog, messagebox
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.i18n import i18n as _i18n
 from core.system_check import get_status
-from core.pipeline import run_full_scan, execute_renames, load_config
+from core.pipeline import run_full_scan, execute_renames, load_config, load_preset, PRESETS
 
 class SisyphusApp:
     def __init__(self):
@@ -21,6 +21,7 @@ class SisyphusApp:
         
         self.target_dir = tk.StringVar(value=os.path.expanduser("~\\Downloads"))
         self.config_path = tk.StringVar(value="")
+        self.preset_var = tk.StringVar(value="")
         self.preview_data = []
         self.backup_dir = ""
         self.running = False
@@ -46,6 +47,15 @@ class SisyphusApp:
         cfg_entry = ttk.Entry(top, textvariable=self.config_path, width=20)
         cfg_entry.pack(side="left", padx=2)
         ttk.Button(top, text="...", width=3, command=self._browse_config).pack(side="left")
+        
+        # Preset dropdown
+        ttk.Label(top, text=self._("preset_label")).pack(side="left", padx=(10,2))
+        preset_names = {k: v for k, v in PRESETS.items()}
+        preset_display = ["(none)"] + list(preset_names.keys())
+        self.preset_combo = ttk.Combobox(top, textvariable=self.preset_var,
+            values=preset_display, width=28, state="readonly")
+        self.preset_combo.pack(side="left", padx=2)
+        self.preset_combo.set("(none)")
         
         # Language
         lang_frame = ttk.Frame(top)
@@ -172,11 +182,15 @@ class SisyphusApp:
         
         # Load config
         config = None
+        preset = self.preset_var.get()
         cfg = self.config_path.get()
-        if cfg and os.path.exists(cfg):
+        
+        if preset and preset != "(none)":
+            config = load_config(cfg if cfg else None, preset=preset)
+        elif cfg and os.path.exists(cfg):
             config = load_config(cfg)
         else:
-            config = load_config()
+            config = load_config()  # Built-in defaults only
         
         def worker():
             try:

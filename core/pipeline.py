@@ -1,116 +1,187 @@
 """
-Sisyphus Recovery Pipeline Orchestrator.
-Runs strategies in priority order: metadata → sanitize → fallback.
+Sisyphus Recovery Pipeline v1.2
+Chain of Responsibility: Gate → Metadata → Hardcode → Regex → Sanitize → Fallback → Collision
 """
 import os, re, yaml, csv, datetime, shutil, hashlib
-from .metadata import scan_metadata
-from .sanitizer import scan_sanitize
+from .sanitizer import is_garbled, sanitize_filename, cluster_fallback
+from .metadata import extract_metadata
 
 DEFAULT_CONFIG = {
     "hardcode_mappings": {},
     "regex_rules": [],
-    "skip_patterns": [
-        r"^Recovered_", r"^_Trash", r"^_Sisyphus"
-    ],
-    "garbled_chars": "",
+    "skip_patterns": [r"^Recovered_", r"^_Trash", r"^_Sisyphus"],
+    "garbled_patterns": [],
+    "metadata_priority": "normal",
 }
 
+# Preset lookup
+_PRESET_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "presets")
+PRESETS = {
+    "01_standard_gbk_utf8": os.path.join(_PRESET_DIR, "01_standard_gbk_utf8.yaml"),
+    "02_media_torrent":     os.path.join(_PRESET_DIR, "02_media_torrent.yaml"),
+    "03_office_batch":      os.path.join(_PRESET_DIR, "03_office_batch.yaml"),
+}
 
-def load_config(config_path=None):
-    """Load YAML config or return defaults"""
-    if config_path and os.path.exists(config_path):
+def load_preset(preset_key):
+    """Load a named preset configuration"""
+    path = PRESETS.get(preset_key)
+    if path and os.path.exists(path):
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 cfg = yaml.safe_load(f)
             if cfg:
                 return {**DEFAULT_CONFIG, **cfg}
         except: pass
+    return None
+
+def load_config(config_path=None, preset=None):
+    """Load configuration with preset override chain:
+    1. DEFAULT_CONFIG (baseline)
+    2. Preset overlay (if preset selected)
+    3. User config file overlay (if provided)
+    """
+    cfg = dict(DEFAULT_CONFIG)
     
-    # Auto-discover config.yaml in project root
-    for candidate in ('config.yaml', 'config/config.yaml', 'config_template.yaml'):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), candidate)
-        if os.path.exists(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    cfg = yaml.safe_load(f)
-                if cfg: return {**DEFAULT_CONFIG, **cfg}
-            except: pass
+    # Layer 2: Preset
+    if preset and preset in PRESETS:
+        preset_cfg = load_preset(preset)
+        if preset_cfg:
+            cfg.update(preset_cfg)
+    elif preset:
+        # Try as file path
+        try:
+            with open(preset, 'r', encoding='utf-8') as f:
+                user_cfg = yaml.safe_load(f)
+            if user_cfg:
+                cfg.update(user_cfg)
+        except: pass
     
-    return DEFAULT_CONFIG
+    # Layer 3: User config file (highest priority)
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                user_cfg = yaml.safe_load(f)
+            if user_cfg:
+                cfg.update(user_cfg)
+        except: pass
+    
+    # Auto-discover config.yaml if nothing provided
+    if not config_path and not preset:
+        for candidate in ('config.yaml', os.path.join('config', 'config.yaml')):
+            path = os.path.join(os.path.dirname(_PRESET_DIR), candidate)
+            if os.path.exists(path):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        user_cfg = yaml.safe_load(f)
+                    if user_cfg:
+                        cfg.update(user_cfg)
+                except: pass
+                break
+    
+    return cfg
 
 
-def apply_hardcode_mappings(directory, config):
-    """Apply exact filename mappings from config"""
-    records = []
+# ============================================================
+# Chain of Responsibility: Single file processor
+# ============================================================
+
+def process_file(fpath, fname, config):
+    """
+    Process a single file through the chain of responsibility.
+    Each step returns a result if successful, otherwise passes to next.
+    
+    Chain: GATE → METADATA → HARDCODE → REGEX → SANITIZE → FALLBACK
+    """
+    # === GATE: Skip non-garbled files ===
+    extra = config.get('garbled_patterns', [])
+    if not is_garbled(fname, extra):
+        return None  # File is clean
+    
+    ext = os.path.splitext(fname)[1].lower()
+    
+    # === STEP 1: Metadata extraction (most reliable) ===
+    metadata_prio = config.get('metadata_priority', 'normal')
+    if metadata_prio in ('high', 'maximum', 'normal'):
+        result = extract_metadata(fpath)
+        if result:
+            new_name, category = result
+            if new_name != fname and len(new_name) >= 3:
+                return (new_name, category.capitalize())
+    
+    # === STEP 2: Hardcode dictionary (exact match) ===
     mappings = config.get('hardcode_mappings', {})
-    for fname in sorted(os.listdir(directory)):
-        if fname in mappings:
-            records.append((fname, mappings[fname], "Hardcode"))
-    return records
+    if fname in mappings:
+        return (mappings[fname], "Hardcode")
+    
+    # === STEP 3: Regex rules (pattern replacement) ===
+    for rule in config.get('regex_rules', []):
+        pat = rule.get('pattern', '')
+        rep = rule.get('replace', '')
+        if pat and rep:
+            try:
+                new = re.sub(pat, rep, fname)
+                if new != fname and len(new) >= 3:
+                    return (new, "Regex")
+            except re.error:
+                pass
+    
+    # === STEP 4: Generic sanitizer ===
+    cleaned = sanitize_filename(fname)
+    if cleaned and cleaned != fname and len(cleaned) >= 3:
+        return (cleaned, "Sanitize")
+    
+    # === STEP 5: Fallback cluster ===
+    result = cluster_fallback(fpath, os.path.dirname(fpath))
+    if result:
+        return (result, "Fallback")
+    
+    return None
 
 
-def apply_regex_rules(directory, config):
-    """Apply regex replace rules from config"""
-    records = []
-    rules = config.get('regex_rules', [])
-    for fname in sorted(os.listdir(directory)):
-        fpath = os.path.join(directory, fname)
-        if os.path.isdir(fpath): continue
-        for rule in rules:
-            pattern = rule.get('pattern', '')
-            replace = rule.get('replace', '')
-            if pattern and replace:
-                new = re.sub(pattern, replace, fname)
-                if new != fname:
-                    records.append((fname, new, "Regex"))
-                    break
-    return records
-
+# ============================================================
+# Directory scanner
+# ============================================================
 
 def run_full_scan(directory, config=None):
-    """Run all recovery strategies in priority order.
+    """Run chain of responsibility on all files in directory.
     Returns [(old_name, new_name, strategy), ...]
     """
     if config is None:
         config = load_config()
     
-    all_records = []
-    seen_old = set()
+    records = []
+    skip = set(config.get('skip_patterns', []))
     
-    # Priority 0: Hardcode mappings (user-specified exact matches)
-    hardcode = apply_hardcode_mappings(directory, config)
-    for old, new, strat in hardcode:
-        if old not in seen_old:
-            all_records.append((old, new, strat))
-            seen_old.add(old)
+    for fname in sorted(os.listdir(directory)):
+        fpath = os.path.join(directory, fname)
+        
+        # Skip patterns
+        if any(re.match(p, fname) for p in skip):
+            continue
+        
+        # Process directories
+        if os.path.isdir(fpath):
+            if is_garbled(fname):
+                cleaned = sanitize_filename(fname)
+                if cleaned and cleaned != fname and len(cleaned) >= 2:
+                    records.append((fname, cleaned, "DirSanitize"))
+            continue
+        
+        result = process_file(fpath, fname, config)
+        if result:
+            new_name, strategy = result
+            records.append((fname, new_name, strategy))
     
-    # Priority 1: Metadata extraction (most reliable)
-    metadata = scan_metadata(directory, config)
-    for old, new, strat in metadata:
-        if old not in seen_old:
-            all_records.append((old, new, strat))
-            seen_old.add(old)
-    
-    # Priority 2: Regex rules (user-specified patterns)
-    regex = apply_regex_rules(directory, config)
-    for old, new, strat in regex:
-        if old not in seen_old:
-            all_records.append((old, new, strat))
-            seen_old.add(old)
-    
-    # Priority 3: Generic sanitizer + fallback cluster
-    sanitized = scan_sanitize(directory, config)
-    for old, new, strat in sanitized:
-        if old not in seen_old:
-            all_records.append((old, new, strat))
-            seen_old.add(old)
-    
-    return all_records
+    return records
 
+
+# ============================================================
+# Collision-safe executor
+# ============================================================
 
 def execute_renames(directory, records, backup_dir=None):
-    """Execute a list of (old_name, new_name, strategy) renames.
-    Returns (renamed, deleted, clustered, failed, log_path).
+    """Execute renames with MD5 collision checking.
+    Returns (renamed, deleted, clustered, failed, log_path)
     """
     if backup_dir is None:
         backup_dir = os.path.join(directory, "_Sisyphus_Backups")
@@ -126,20 +197,17 @@ def execute_renames(directory, records, backup_dir=None):
         h = hashlib.md5()
         try:
             with open(fpath, 'rb') as f:
-                for chunk in iter(lambda: f.read(65536), b''):
-                    h.update(chunk)
+                for chunk in iter(lambda: f.read(65536), b''): h.update(chunk)
             return h.hexdigest()
         except: return None
     
     for old, new, strat in records:
         old_path = os.path.join(directory, old)
         if not os.path.exists(old_path):
-            log.append((old, new, "NOT_FOUND", strat))
-            failed += 1
-            continue
+            log.append((old, new, "NOT_FOUND", strat)); failed += 1; continue
         
+        # Cluster: move to subfolder
         if "/" in new or "\\" in new:
-            # Cluster: move to subfolder
             parts = new.replace("\\", "/").split("/")
             folder = os.path.join(directory, parts[0])
             os.makedirs(folder, exist_ok=True)
@@ -149,31 +217,37 @@ def execute_renames(directory, records, backup_dir=None):
                 clustered += 1
                 log.append((old, new, "CLUSTERED", strat))
             except Exception as e:
-                failed += 1
-                log.append((old, new, f"FAIL:{e}", strat))
-        else:
-            target = os.path.join(directory, new)
-            if os.path.exists(target):
-                h1 = _hash(old_path)
-                h2 = _hash(target)
-                if h1 and h2 and h1 == h2:
-                    shutil.move(old_path, os.path.join(trash, old))
-                    deleted += 1
-                    log.append((old, new, "DELETED_DUP", strat))
-                else:
-                    base, ext = os.path.splitext(new)
-                    alt = f"{base}_DUP{ext}"
-                    os.rename(old_path, os.path.join(directory, alt))
-                    renamed += 1
-                    log.append((old, alt, "RENAMED_COL", strat))
+                failed += 1; log.append((old, new, f"FAIL:{e}", strat))
+            continue
+        
+        # === COLLISION CHECK ===
+        target = os.path.join(directory, new)
+        if os.path.exists(target):
+            h1 = _hash(old_path); h2 = _hash(target)
+            if h1 and h2 and h1 == h2:
+                # Same content → delete duplicate
+                shutil.move(old_path, os.path.join(trash, old))
+                deleted += 1; log.append((old, new, "DELETED_DUP", strat))
             else:
+                # Different content → timestamp suffix
                 try:
-                    os.rename(old_path, target)
-                    renamed += 1
-                    log.append((old, new, "RENAMED", strat))
+                    mtime = os.path.getmtime(old_path)
+                    ts = datetime.datetime.fromtimestamp(mtime).strftime("%m%d_%H%M")
+                except:
+                    ts = datetime.datetime.now().strftime("%m%d_%H%M")
+                base, ext = os.path.splitext(new)
+                alt = f"{base}_v{ts}{ext}"
+                try:
+                    os.rename(old_path, os.path.join(directory, alt))
+                    renamed += 1; log.append((old, alt, "RENAMED_COL", strat))
                 except Exception as e:
-                    failed += 1
-                    log.append((old, new, f"FAIL:{e}", strat))
+                    failed += 1; log.append((old, new, f"FAIL:{e}", strat))
+        else:
+            try:
+                os.rename(old_path, target)
+                renamed += 1; log.append((old, new, "RENAMED", strat))
+            except Exception as e:
+                failed += 1; log.append((old, new, f"FAIL:{e}", strat))
     
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(backup_dir, f"execution_{ts}.csv")
