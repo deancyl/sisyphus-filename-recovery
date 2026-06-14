@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+_Sisyphus_Backups/
+_Trash_Duplicates/
+Recovered_*/
+*.csv
+*.txt
+!requirements.txt
+.DS_Store

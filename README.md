@@ -1,0 +1,60 @@
+# Sisyphus - 乱码文件名智能修复系统
+
+## 简介
+
+Sisyphus 是一套专门针对 **Windows 中文编码错乱导致文件名乱码** 的智能修复工具。
+
+**核心创新**：放弃传统的字节级编码逆向转换（UTF-8↔GBK），转而采用**文件内容元数据提取 + 特征锚点语义重建**的策略，实现了在原始字节信息已物理丢失的情况下依然能恢复文件名的"降维打击"。
+
+## 适用场景
+
+- Windows 启用"Beta: 使用 Unicode UTF-8"后，国产软件（GBK编码）产生的文件名乱码
+- 压缩包解压后中文文件名变成"锟斤拷""閿熸枻鎷"等乱码
+- 浏览器下载的中文文件名显示异常
+- 多轮错误的编码转换叠加导致文件名不可逆损坏
+
+## 五阶段恢复策略
+
+| 阶段 | 策略 | 方法 |
+|------|------|------|
+| Phase 1 | 系统编码检查 | 检测并修复 ACP 代码页（936 GBK） |
+| Phase 2 | 薪资文件内容提取 | openpyxl 读取 Excel 内部数据提取店名 |
+| Phase 3 | 元数据恢复 | Torrent/PDF/Docx 内置元数据提取 |
+| Phase 4 | 自动裁决 | 哈希消歧 + ZIP内视 + TXT首行 + 时序聚类 |
+| Phase 5 | 精准清尾 | 假阳性过滤 + 硬编码字典 + 正则保留 |
+
+## 快速开始
+
+```bash
+pip install -r requirements.txt
+python gui.py
+```
+
+## 项目结构
+
+```
+├── gui.py                  # 主界面 (customtkinter)
+├── core/                   # 核心引擎
+│   ├── system_check.py     # Phase 1: 系统编码检测
+│   ├── salary_recovery.py  # Phase 2: Excel 内容提取
+│   ├── metadata_recovery.py # Phase 3: 元数据恢复
+│   ├── archive_recovery.py # Phase 4-M2: ZIP 内视
+│   ├── text_recovery.py    # Phase 4-M3: TXT 首行
+│   ├── cluster_recovery.py # Phase 4-M4: 时序聚类
+│   └── hardcode_recovery.py # Phase 5: 硬编码+正则
+├── logs/                   # 历史执行记录
+├── assets/                 # 界面资源
+├── requirements.txt
+└── README.md
+```
+
+## 安全机制
+
+- **强制预览**：所有操作默认仅生成 CSV 预览，需手动确认后执行
+- **自动备份**：执行前自动生成文件名快照
+- **哈希查重**：COLLISION 冲突自动 MD5 判重，避免误删
+- **假阳性保护**：正确中文文件自动识别并跳过
+
+## 许可证
+
+MIT License
