@@ -1,42 +1,41 @@
 # Changelog
 
+## v1.1.0 (2026-06-14)
+### Breaking Changes
+- Removed business-specific modules: salary_recovery.py, hardcode_recovery.py
+- Consolidated archive/text/cluster/metadata_recovery into pipeline + metadata + sanitizer
+
+### Added
+- Universal pipeline orchestrator (core/pipeline.py): Hardcode → Metadata → Regex → Sanitizer → Fallback
+- Config-driven rule engine (config/config_template.yaml) for user customization
+- Generic metadata extractor (core/metadata.py) covering all file types
+- Generic garbled sanitizer (core/sanitizer.py) with no business logic
+- Config file selector in GUI
+- About dialog with version info
+
+### Architecture
+All business-specific logic (store names, keyfile patterns, salary templates) moved to external YAML config. Tool is now fully usable by anyone.
+
 ## v1.0.2 (2026-06-14)
 ### Changed
-- Universal strategy naming: describe mechanism, not use case
-  - "Excel Salary Recovery" → "Content Intelligence"
-  - "Metadata Recovery" → "Embedded Metadata"
-  - "ZIP Interior" → "Archive Discovery"
-  - "Text First-Line" → "Text Header Auto-Name"
-  - "Time Clustering" → "Chronological Archive"
-  - "Hardcode + Regex" → "Pattern Sanitizer"
-- Updated all i18n strings (zh/en) to reflect new names
-- README strategy table updated
+- Universal strategy naming (describe mechanism, not use case)
+- Updated i18n zh/en translations
 
 ## v1.0.1 (2026-06-14)
 ### Changed
-- Replaced customtkinter with pure tkinter (zero extra GUI dependencies)
-- Full i18n support: auto-detect system language, toggle zh/en
-- Added core/i18n.py language manager
+- Replaced customtkinter with pure tkinter (zero extra GUI deps)
+- Full i18n support: auto-detect system language, zh/en toggle
 - Streamlined UI: scan → preview → execute flow
-- All core modules integration-tested
 
 ### Fixed
-- GUI launch crash on missing customtkinter
+- GUI crash on missing customtkinter
 
 ## v1.0.0 (2026-06-14)
 ### Added
-- GUI interface for visual operation
-- Phase 1: System ACP encoding check and fix
-- Phase 2: Content intelligence (Excel cell reading via openpyxl)
-- Phase 3: Embedded metadata extraction (torrent bencode, PDF PyPDF2, docx python-docx, media mutagen)
-- Phase 4: Archive content discovery, text header detection, chronological archiving, hash-based dedup
-- Phase 5: Pattern sanitizer with hardcode dictionary and regex cleanup
-- Automatic backup before modifications
-- Execution audit logging
-- Mandatory preview-before-execute safety
+- 5-phase garbled filename recovery system
+- GUI with preview-before-execute safety
+- Automatic backup + audit logging
 - MD5 hash collision resolution
 
 ### Validated
-- Tested on Windows zh-CN, ACP=936
-- 400+ garbled filenames recovered across 5 phases
-- 100% recovery rate validated
+- 400+ filenames recovered, 100% success rate
