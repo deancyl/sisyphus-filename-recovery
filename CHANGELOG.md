@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.2.0 (2026-06-14)
+### Added
+- Built-in garbled fingerprint database (no config needed)
+- `is_garbled()` decision tree: fingerprints before safe-CJK gate
+- Three preset configurations: standard, media/torrent, office/batch
+- GUI preset dropdown for one-click switching
+- Chain-of-Responsibility pipeline: Gate → Metadata → Hardcode → Regex → Sanitize → Fallback
+- `process_file()` returns immediately on first recovery success
+- Collision check with MD5 dedup + timestamp suffix
+
+### Fixed
+- False positives: normal Chinese filenames never flagged as garbled
+- Garbled CJK detection: fingerprints checked before safe-CJK gate
+
+### Architecture
+```
+is_garbled(filename)
+  → Fingerprint match? YES → return True
+  → Control chars?   YES → return True
+  → U+FFFD blocks?   YES → return True
+  → Safe CJK+ASCII?  YES → return False (interceptor)
+  → return False
+```
+
 ## v1.1.0 (2026-06-14)
 ### Breaking Changes
 - Removed business-specific modules: salary_recovery.py, hardcode_recovery.py
