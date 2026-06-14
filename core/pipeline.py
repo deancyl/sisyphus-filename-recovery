@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     "metadata_priority": "normal",
 }
 
-# Preset lookup
+# Preset lookup (key -> file path)
 _PRESET_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "presets")
 PRESETS = {
     "01_standard_gbk_utf8": os.path.join(_PRESET_DIR, "01_standard_gbk_utf8.yaml"),
@@ -22,61 +22,66 @@ PRESETS = {
     "03_office_batch":      os.path.join(_PRESET_DIR, "03_office_batch.yaml"),
 }
 
-def load_preset(preset_key):
-    """Load a named preset configuration"""
-    path = PRESETS.get(preset_key)
+# Preset display name -> internal key (populated by i18n at runtime)
+PRESET_DISPLAY = {}
+
+def sync_preset_display():
+    """Sync PRESET_DISPLAY with current i18n language"""
+    try:
+        from .i18n import i18n
+        keys = list(PRESETS.keys())
+        display_keys = ["preset_standard", "preset_media", "preset_office"]
+        for i, key in enumerate(keys):
+            if i < len(display_keys):
+                PRESET_DISPLAY[key] = i18n.get(display_keys[i])
+    except: pass
+
+sync_preset_display()
+
+def load_preset(preset_name):
+    """Load a named preset. Accepts internal key or display name."""
+    # Try internal key first
+    path = PRESETS.get(preset_name)
+    # Then try display name -> internal key lookup
+    if not path:
+        for key, files in PRESETS.items():
+            if preset_name == PRESET_DISPLAY.get(key):
+                path = files
+                break
     if path and os.path.exists(path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 cfg = yaml.safe_load(f)
-            if cfg:
-                return {**DEFAULT_CONFIG, **cfg}
+            if cfg: return {**DEFAULT_CONFIG, **cfg}
         except: pass
     return None
 
 def load_config(config_path=None, preset=None):
-    """Load configuration with preset override chain:
-    1. DEFAULT_CONFIG (baseline)
-    2. Preset overlay (if preset selected)
-    3. User config file overlay (if provided)
+    """Load configuration. preset can be: internal key, display name, or YAML file path.
+    Order: defaults → preset → user config file (if provided)
     """
     cfg = dict(DEFAULT_CONFIG)
     
-    # Layer 2: Preset
-    if preset and preset in PRESETS:
+    if preset:
+        # Try as preset name first
         preset_cfg = load_preset(preset)
         if preset_cfg:
             cfg.update(preset_cfg)
-    elif preset:
-        # Try as file path
-        try:
-            with open(preset, 'r', encoding='utf-8') as f:
-                user_cfg = yaml.safe_load(f)
-            if user_cfg:
-                cfg.update(user_cfg)
-        except: pass
+        elif os.path.exists(preset):
+            # Treat as custom YAML file path
+            try:
+                with open(preset, 'r', encoding='utf-8') as f:
+                    user_cfg = yaml.safe_load(f)
+                if user_cfg: cfg.update(user_cfg)
+            except: pass
     
-    # Layer 3: User config file (highest priority)
+    # User config file overlay
     if config_path and os.path.exists(config_path):
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 user_cfg = yaml.safe_load(f)
-            if user_cfg:
-                cfg.update(user_cfg)
+            if user_cfg: cfg.update(user_cfg)
         except: pass
-    
-    # Auto-discover config.yaml if nothing provided
-    if not config_path and not preset:
-        for candidate in ('config.yaml', os.path.join('config', 'config.yaml')):
-            path = os.path.join(os.path.dirname(_PRESET_DIR), candidate)
-            if os.path.exists(path):
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        user_cfg = yaml.safe_load(f)
-                    if user_cfg:
-                        cfg.update(user_cfg)
-                except: pass
-                break
     
     return cfg
 

@@ -9,7 +9,7 @@ from tkinter import ttk, filedialog, messagebox
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.i18n import i18n as _i18n
 from core.system_check import get_status
-from core.pipeline import run_full_scan, execute_renames, load_config, load_preset, PRESETS
+from core.pipeline import run_full_scan, execute_renames, load_config, PRESETS, PRESET_DISPLAY
 
 class SisyphusApp:
     def __init__(self):
@@ -20,7 +20,6 @@ class SisyphusApp:
         self.root.minsize(800, 500)
         
         self.target_dir = tk.StringVar(value=os.path.expanduser("~\\Downloads"))
-        self.config_path = tk.StringVar(value="")
         self.preset_var = tk.StringVar(value="")
         self.preview_data = []
         self.backup_dir = ""
@@ -28,6 +27,17 @@ class SisyphusApp:
         
         self._build_ui()
         self._check_system()
+    
+    def _get_preset_options(self):
+        """Return localized preset dropdown options"""
+        internal_keys = list(PRESETS.keys())
+        return [
+            self._("preset_none"),
+            self._("preset_standard"),
+            self._("preset_media"),
+            self._("preset_office"),
+            self._("preset_custom"),
+        ]
     
     def _build_ui(self):
         r = self.root
@@ -42,20 +52,12 @@ class SisyphusApp:
         ttk.Entry(top, textvariable=self.target_dir, width=50).pack(side="left", padx=2)
         ttk.Button(top, text=self._("browse"), command=self._browse).pack(side="left", padx=2)
         
-        # Config file
+        # Preset (unified config + preset)
         ttk.Label(top, text=self._("config_label")).pack(side="left", padx=(10,2))
-        cfg_entry = ttk.Entry(top, textvariable=self.config_path, width=20)
-        cfg_entry.pack(side="left", padx=2)
-        ttk.Button(top, text="...", width=3, command=self._browse_config).pack(side="left")
-        
-        # Preset dropdown
-        ttk.Label(top, text=self._("preset_label")).pack(side="left", padx=(10,2))
-        preset_names = {k: v for k, v in PRESETS.items()}
-        preset_display = ["(none)"] + list(preset_names.keys())
         self.preset_combo = ttk.Combobox(top, textvariable=self.preset_var,
-            values=preset_display, width=28, state="readonly")
+            values=self._get_preset_options(), width=30, state="readonly")
         self.preset_combo.pack(side="left", padx=2)
-        self.preset_combo.set("(none)")
+        self.preset_combo.set(self._("preset_none"))
         
         # Language
         lang_frame = ttk.Frame(top)
@@ -129,6 +131,15 @@ class SisyphusApp:
             messagebox.showinfo(self._("lang_title"), self._("lang_restart"))
             self.lang_var.set(_i18n.lang)
     
+    def _refresh_preset_options(self):
+        """Rebuild preset dropdown with current language"""
+        old = self.preset_var.get()
+        self.preset_combo['values'] = self._get_preset_options()
+        if old in self.preset_combo['values']:
+            self.preset_var.set(old)
+        else:
+            self.preset_var.set(self._("preset_none"))
+    
     def _set_status(self, msg):
         self.status_lbl.configure(text=msg); self.root.update_idletasks()
     
@@ -136,10 +147,26 @@ class SisyphusApp:
         p = filedialog.askdirectory(title="Target Directory")
         if p: self.target_dir.set(p)
     
-    def _browse_config(self):
-        p = filedialog.askopenfilename(title="Select Config YAML",
-            filetypes=[("YAML","*.yaml;*.yml"),("All","*.*")])
-        if p: self.config_path.set(p)
+    def _resolve_preset(self):
+        """Map dropdown display name → preset key or YAML path"""
+        val = self.preset_var.get()
+        if val == self._("preset_none"):
+            return None
+        if val == self._("preset_custom"):
+            p = filedialog.askopenfilename(
+                title="Select Custom YAML",
+                filetypes=[("YAML","*.yaml;*.yml"),("All","*.*")])
+            return p if p else None
+        # Map display name → internal key
+        internal = list(PRESETS.keys())
+        for i, key in enumerate(internal):
+            display_names = [
+                self._("preset_standard"), self._("preset_media"),
+                self._("preset_office")
+            ]
+            if i < len(display_names) and val == display_names[i]:
+                return key
+        return None
     
     def _check_system(self):
         try:
@@ -180,17 +207,9 @@ class SisyphusApp:
         self.preview_data = []
         self.progress["value"] = 0
         
-        # Load config
-        config = None
-        preset = self.preset_var.get()
-        cfg = self.config_path.get()
-        
-        if preset and preset != "(none)":
-            config = load_config(cfg if cfg else None, preset=preset)
-        elif cfg and os.path.exists(cfg):
-            config = load_config(cfg)
-        else:
-            config = load_config()  # Built-in defaults only
+        # Load config from preset
+        preset = self._resolve_preset()
+        config = load_config(preset=preset)
         
         def worker():
             try:
