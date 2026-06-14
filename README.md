@@ -13,15 +13,26 @@ Sisyphus 是一套专门针对 **Windows 中文编码错乱导致文件名乱码
 - 浏览器下载的中文文件名显示异常
 - 多轮错误的编码转换叠加导致文件名不可逆损坏
 
-## 五阶段恢复策略
+## 恢复流水线
 
-| 阶段 | 策略 | 方法 |
-|------|------|------|
-| Phase 1 | 系统编码检查 | 检测并修复 ACP 代码页（936 GBK） |
-| Phase 2 | 内容智能识别 | 读取文件内部数据重建文件名（如 Excel 单元格、数据库记录） |
-| Phase 3 | 内嵌元数据提取 | 提取 PDF/Torrent/Office 文档/媒体文件的内置标题 |
-| Phase 4 | 多层自动裁决 | 压缩包内视 + 文本首行提取 + 按日期归档 + 哈希查重 |
-| Phase 5 | 乱码模式清洗 | 剥离乱码 Unicode 块，保留可识别的英文/数字片段 |
+```
+Hardcode Mappings → Metadata Extraction → Regex Rules → Sanitizer → Fallback Cluster
+```
+
+| 优先级 | 策略 | 方法 |
+|--------|------|------|
+| P0 | 硬编码映射 | 用户自定义 YAML 精确匹配规则 |
+| P1 | 元数据提取 | 读取文件内部标题/标签 (Excel/PDF/Docx/Torrent/媒体) |
+| P2 | 正则规则 | 用户自定义正则替换模式 |
+| P3 | 通用清洗 | 剥离已知乱码字符块，保留可识别片段 |
+| P4 | 兜底归档 | 按创建日期 + MD5 指纹归档到 Recovered_* 目录 |
+
+## 自定义配置
+
+复制 `config/config_template.yaml` 为 `config.yaml`，按需编辑：
+- `hardcode_mappings`: 精确文件名 → 新文件名
+- `regex_rules`: 正则模式 → 替换文本
+- `skip_patterns`: 跳过保护的文件名模式
 
 ## 快速开始
 
@@ -40,12 +51,11 @@ GUI auto-detects system language (zh-CN / en-US).
 ├── core/                   # 核心引擎
 │   ├── i18n.py             # 中英文语言包 (zh/en)
 │   ├── system_check.py     # Phase 1: 系统编码检测
-│   ├── salary_recovery.py  # Phase 2: 内容智能识别
-│   ├── metadata_recovery.py # Phase 3: 内嵌元数据提取
-│   ├── archive_recovery.py # Phase 4: 压缩包内容发现
-│   ├── text_recovery.py    # Phase 4: 文本首行命名
-│   ├── cluster_recovery.py # Phase 4: 按日期归档 + 哈希消歧
-│   └── hardcode_recovery.py # Phase 5: 乱码模式清洗
+│   ├── metadata.py         # 通用元数据提取 (Excel/PDF/Docx/Torrent/媒体)
+│   ├── sanitizer.py        # 通用乱码清洗 + 按日期兜底归档
+│   └── pipeline.py         # 策略编排器 (硬编码→元数据→正则→清洗→归档)
+├── config/                 # 用户自定义规则
+│   └── config_template.yaml # 配置模板 (复制为 config.yaml 使用)
 ├── logs/                   # 历史执行记录
 ├── requirements.txt
 ├── README.md
