@@ -26,26 +26,30 @@ Sisyphus 是一套专门针对 **Windows 中文编码错乱导致文件名乱码
 ## 快速开始
 
 ```bash
+# Prerequisites: Python 3.8+, tkinter (included with Python on Windows)
 pip install -r requirements.txt
 python gui.py
 ```
 
+GUI auto-detects system language (zh-CN / en-US).
+
 ## 项目结构
 
 ```
-├── gui.py                  # 主界面 (customtkinter)
+├── gui.py                  # 主界面 (纯 tkinter，零额外 GUI 依赖)
 ├── core/                   # 核心引擎
+│   ├── i18n.py             # 中英文语言包 (zh/en)
 │   ├── system_check.py     # Phase 1: 系统编码检测
-│   ├── salary_recovery.py  # Phase 2: Excel 内容提取
-│   ├── metadata_recovery.py # Phase 3: 元数据恢复
-│   ├── archive_recovery.py # Phase 4-M2: ZIP 内视
-│   ├── text_recovery.py    # Phase 4-M3: TXT 首行
-│   ├── cluster_recovery.py # Phase 4-M4: 时序聚类
-│   └── hardcode_recovery.py # Phase 5: 硬编码+正则
+│   ├── salary_recovery.py  # Phase 2: 内容智能识别
+│   ├── metadata_recovery.py # Phase 3: 内嵌元数据提取
+│   ├── archive_recovery.py # Phase 4: 压缩包内容发现
+│   ├── text_recovery.py    # Phase 4: 文本首行命名
+│   ├── cluster_recovery.py # Phase 4: 按日期归档 + 哈希消歧
+│   └── hardcode_recovery.py # Phase 5: 乱码模式清洗
 ├── logs/                   # 历史执行记录
-├── assets/                 # 界面资源
 ├── requirements.txt
-└── README.md
+├── README.md
+└── CHANGELOG.md
 ```
 
 ## 安全机制
